@@ -115,6 +115,7 @@ func OptionsFromBytesWithParser(data []byte, parser OptionParser, checkEndOption
 	}
 	buf := uio.NewBigEndianBuffer(data)
 	options := make(map[OptionCode][]byte, 10)
+	var order []OptionCode
 
 	// Due to RFC 3396 allowing an option to be specified multiple times,
 	// we have to collect all option data first, and then parse it.
@@ -140,6 +141,9 @@ func OptionsFromBytesWithParser(data []byte, parser OptionParser, checkEndOption
 		}
 		data = data[:length:length]
 
+		if _, ok := options[code]; !ok {
+			order = append(order, code)
+		}
 		// RFC 3396: Just concatenate the data if the option code was
 		// specified multiple times.
 		options[code] = append(options[code], data...)
@@ -159,8 +163,8 @@ func OptionsFromBytesWithParser(data []byte, parser OptionParser, checkEndOption
 	}
 
 	opts := make(Options, 0, 10)
-	for code, data := range options {
-		parsedOpt, err := parser(code, data)
+	for _, code := range order {
+		parsedOpt, err := parser(code, options[code])
 		if err != nil {
 			return nil, fmt.Errorf("error parsing option code %s: %v", code, err)
 		}
