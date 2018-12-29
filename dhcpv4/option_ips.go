@@ -77,12 +77,6 @@ func (o *OptRouter) String() string {
 	return fmt.Sprintf("Routers -> %s", IPsToString(o.Routers))
 }
 
-// Length returns the length of the data portion (excluding option code an byte
-// length).
-func (o *OptRouter) Length() int {
-	return len(o.Routers) * 4
-}
-
 // OptNTPServers represents an option encapsulating the NTP servers.
 type OptNTPServers struct {
 	NTPServers []net.IP
@@ -110,12 +104,6 @@ func (o *OptNTPServers) ToBytes() []byte {
 // String returns a human-readable string.
 func (o *OptNTPServers) String() string {
 	return fmt.Sprintf("NTP Servers -> %v", IPsToString(o.NTPServers))
-}
-
-// Length returns the length of the data portion (excluding option code an byte
-// length).
-func (o *OptNTPServers) Length() int {
-	return len(o.NTPServers) * 4
 }
 
 // OptDomainNameServer represents an option encapsulating the domain name
@@ -147,10 +135,4 @@ func (o *OptDomainNameServer) ToBytes() []byte {
 // String returns a human-readable string.
 func (o *OptDomainNameServer) String() string {
 	return fmt.Sprintf("Domain Name Servers -> %s", IPsToString(o.NameServers))
-}
-
-// Length returns the length of the data portion (excluding option code an byte
-// length).
-func (o *OptDomainNameServer) Length() int {
-	return len(o.NameServers) * 4
 }

@@ -62,5 +62,4 @@ func TestOptGenericLength(t *testing.T) {
 		OptionCode: OptionMachineName,
 		Data:       []byte(filename),
 	}
-	require.Equal(t, len(filename), o.Length())
 }

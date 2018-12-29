@@ -34,7 +34,6 @@ type OptionCode byte
 type Option interface {
 	Code() OptionCode
 	ToBytes() []byte
-	Length() int
 	String() string
 }
 

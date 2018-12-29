@@ -14,7 +14,6 @@ func TestOptRoutersInterfaceMethods(t *testing.T) {
 	}
 	o := OptRouter{Routers: routers}
 	require.Equal(t, OptionRouter, o.Code(), "Code")
-	require.Equal(t, net.IPv4len*len(routers), o.Length(), "Length")
 	require.Equal(t, routers, o.Routers, "Routers")
 }
 
@@ -61,7 +60,6 @@ func TestOptDomainNameServerInterfaceMethods(t *testing.T) {
 	}
 	o := OptDomainNameServer{NameServers: servers}
 	require.Equal(t, OptionDomainNameServer, o.Code(), "Code")
-	require.Equal(t, net.IPv4len*len(servers), o.Length(), "Length")
 	require.Equal(t, servers, o.NameServers, "NameServers")
 }
 
@@ -104,7 +102,6 @@ func TestOptNTPServersInterfaceMethods(t *testing.T) {
 	}
 	o := OptNTPServers{NTPServers: ntpServers}
 	require.Equal(t, OptionNTPServers, o.Code(), "Code")
-	require.Equal(t, net.IPv4len*len(ntpServers), o.Length(), "Length")
 	require.Equal(t, ntpServers, o.NTPServers, "NTPServers")
 }
 
