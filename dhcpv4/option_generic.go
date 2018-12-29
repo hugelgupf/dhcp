@@ -1,38 +1,27 @@
 package dhcpv4
 
 import (
-	"errors"
 	"fmt"
 )
 
-// OptionGeneric is an option that only contains the option code and associated
+// optionGeneric is an option that only contains the option code and associated
 // data. Every option that does not have a specific implementation will fall
 // back to this option.
-type OptionGeneric struct {
-	OptionCode OptionCode
-	Data       []byte
-}
-
-// ParseOptionGeneric parses a bytestream and creates a new OptionGeneric from
-// it, or an error.
-func ParseOptionGeneric(code OptionCode, data []byte) (Option, error) {
-	if len(data) == 0 {
-		return nil, errors.New("invalid zero-length bytestream")
-	}
-	return &OptionGeneric{OptionCode: code, Data: data}, nil
-}
-
-// Code returns the generic option code.
-func (o OptionGeneric) Code() OptionCode {
-	return o.OptionCode
+type optionGeneric struct {
+	Data []byte
 }
 
 // ToBytes returns a serialized generic option as a slice of bytes.
-func (o OptionGeneric) ToBytes() []byte {
+func (o optionGeneric) ToBytes() []byte {
 	return o.Data
 }
 
 // String returns a human-readable representation of a generic option.
-func (o OptionGeneric) String() string {
-	return fmt.Sprintf("%v -> %v", o.OptionCode.String(), o.Data)
+func (o optionGeneric) String() string {
+	return fmt.Sprintf("%v", o.Data)
+}
+
+// OptGeneric returns a generic option.
+func OptGeneric(code OptionCode, value []byte) Option {
+	return Option{Code: code, Value: &optionGeneric{value}}
 }

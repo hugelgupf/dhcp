@@ -5,7 +5,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"math"
 	"net"
 	"strings"
 
@@ -117,7 +116,7 @@ func New() (*DHCPv4, error) {
 	if err != nil {
 		return nil, err
 	}
-	d := DHCPv4{
+	return &DHCPv4{
 		OpCode:        OpcodeBootRequest,
 		HWType:        iana.HWTypeEthernet,
 		HopCount:      0,
@@ -128,10 +127,8 @@ func New() (*DHCPv4, error) {
 		YourIPAddr:    net.IPv4zero,
 		ServerIPAddr:  net.IPv4zero,
 		GatewayIPAddr: net.IPv4zero,
-	}
-	// the End option has to be added explicitly
-	d.AddOption(&OptionGeneric{OptionCode: OptionEnd})
-	return &d, nil
+		Options:       make(Options),
+	}, nil
 }
 
 // NewDiscoveryForInterface builds a new DHCPv4 Discovery message, with a default
@@ -157,15 +154,12 @@ func NewDiscovery(hwaddr net.HardwareAddr) (*DHCPv4, error) {
 	d.HWType = iana.HWTypeEthernet
 	d.ClientHWAddr = hwaddr
 	d.SetBroadcast()
-	d.AddOption(&OptMessageType{MessageType: MessageTypeDiscover})
-	d.AddOption(&OptParameterRequestList{
-		RequestedOpts: []OptionCode{
-			OptionSubnetMask,
-			OptionRouter,
-			OptionDomainName,
-			OptionDomainNameServer,
-		},
-	})
+	d.AddOption(OptMessageType(MessageTypeDiscover))
+	d.AddOption(OptParameterRequestList(
+		OptionSubnetMask,
+		OptionRouter,
+		OptionDomainName,
+		OptionDomainNameServer))
 	return d, nil
 }
 
@@ -210,7 +204,7 @@ func NewInform(hwaddr net.HardwareAddr, localIP net.IP) (*DHCPv4, error) {
 	d.HWType = iana.HWTypeEthernet
 	d.ClientHWAddr = hwaddr
 	d.ClientIPAddr = localIP
-	d.AddOption(&OptMessageType{MessageType: MessageTypeInform})
+	d.AddOption(OptMessageType(MessageTypeInform))
 	return d, nil
 }
 
@@ -230,19 +224,14 @@ func NewRequestFromOffer(offer *DHCPv4, modifiers ...Modifier) (*DHCPv4, error) 
 		d.SetUnicast()
 	}
 	// find server IP address
-	var serverIP []byte
-	for _, opt := range offer.Options {
-		if opt.Code() == OptionServerIdentifier {
-			serverIP = opt.(*OptServerIdentifier).ServerID
-		}
-	}
+	serverIP := GetServerIdentifier(offer.Options)
 	if serverIP == nil {
 		return nil, errors.New("Missing Server IP Address in DHCP Offer")
 	}
 	d.ServerIPAddr = serverIP
-	d.AddOption(&OptMessageType{MessageType: MessageTypeRequest})
-	d.AddOption(&OptRequestedIPAddress{RequestedAddr: offer.YourIPAddr})
-	d.AddOption(&OptServerIdentifier{ServerID: serverIP})
+	d.AddOption(OptMessageType(MessageTypeRequest))
+	d.AddOption(OptRequestedIPAddress(offer.YourIPAddr))
+	d.AddOption(OptServerIdentifier(serverIP))
 	for _, mod := range modifiers {
 		d = mod(d)
 	}
@@ -368,135 +357,41 @@ func (d *DHCPv4) SetUnicast() {
 	d.Flags &= ^uint16(0x8000)
 }
 
+func (d *DHCPv4) AddOption(opt Option) {
+	if d.Options == nil {
+		d.Options = make(Options)
+	}
+	d.Options.Add(opt)
+}
+
+func (d *DHCPv4) UpdateOption(opt Option) {
+	if d.Options == nil {
+		d.Options = make(Options)
+	}
+	d.Options.Update(opt)
+}
+
 // GetOption will attempt to get all options that match a DHCPv4 option
 // from its OptionCode.  If the option was not found it will return an
 // empty list.
 //
 // According to RFC 3396, options that are specified more than once are
 // concatenated, and hence this should always just return one option.
-func (d *DHCPv4) GetOption(code OptionCode) []Option {
-	return d.Options.GetOption(code)
+func (d *DHCPv4) GetOption(code OptionCode) []byte {
+	return d.Options.Get(code)
 }
 
 // GetOneOption will attempt to get an  option that match a Option code.
 // If there are multiple options with the same OptionCode it will only return
 // the first one found.  If no matching option is found nil will be returned.
-func (d *DHCPv4) GetOneOption(code OptionCode) Option {
-	return d.Options.GetOneOption(code)
-}
-
-// Options is a collection of options.
-type Options []Option
-
-// GetOption will attempt to get all options that match a DHCPv4 option
-// from its OptionCode.  If the option was not found it will return an
-// empty list.
-//
-// According to RFC 3396, options that are specified more than once are
-// concatenated, and hence this should always just return one option.
-func (o Options) GetOption(code OptionCode) []Option {
-	opts := []Option{}
-	for _, opt := range o {
-		if opt.Code() == code {
-			opts = append(opts, opt)
-		}
-	}
-	return opts
-}
-
-// GetOneOption will attempt to get an  option that match a Option code.
-// If there are multiple options with the same OptionCode it will only return
-// the first one found.  If no matching option is found nil will be returned.
-func (o Options) GetOneOption(code OptionCode) Option {
-	for _, opt := range o {
-		if opt.Code() == code {
-			return opt
-		}
-	}
-	return nil
-}
-
-// Marshal writes options binary representations to b.
-func (o Options) Marshal(b *uio.Lexer, writeEnd bool) {
-	for _, opt := range o {
-		code := opt.Code()
-
-		// Even if the End option is in there, don't marshal it until
-		// the end.
-		if code == OptionEnd {
-			continue
-		}
-
-		data := opt.ToBytes()
-
-		// RFC 3396: If more than 256 bytes of data are given, the
-		// option is simply listed multiple times.
-		for len(data) > 0 {
-			// 1 byte: option code
-			b.Write8(uint8(code))
-
-			// Some DHCPv4 options have fixed length and do not put
-			// length on the wire.
-			if code == OptionPad {
-				continue
-			}
-
-			n := len(data)
-			if n > math.MaxUint8 {
-				n = math.MaxUint8
-			}
-
-			// 1 byte: option length
-			b.Write8(uint8(n))
-
-			// N bytes: option data
-			b.WriteBytes(data[:n])
-			data = data[n:]
-		}
-	}
-
-	if writeEnd {
-		b.Write8(uint8(OptionEnd))
-	}
-
-	// TODO: potentially pad until a minimum size.
-}
-
-// AddOption appends an option to the existing ones. If the last option is an
-// OptionEnd, it will be inserted before that. It does not deal with End
-// options that appead before the end, like in malformed packets.
-func (d *DHCPv4) AddOption(option Option) {
-	if len(d.Options) == 0 || d.Options[len(d.Options)-1].Code() != OptionEnd {
-		d.Options = append(d.Options, option)
-	} else {
-		end := d.Options[len(d.Options)-1]
-		d.Options[len(d.Options)-1] = option
-		d.Options = append(d.Options, end)
-	}
-}
-
-// UpdateOption updates the existing options with the passed option, adding it
-// at the end if not present already
-func (d *DHCPv4) UpdateOption(option Option) {
-	for idx, opt := range d.Options {
-		if opt.Code() == option.Code() {
-			d.Options[idx] = option
-			// don't look further
-			return
-		}
-	}
-	// if not found, add it
-	d.AddOption(option)
+func (d *DHCPv4) GetOneOption(code OptionCode) []byte {
+	return d.Options.Get(code)
 }
 
 // MessageType returns the message type, trying to extract it from the
 // OptMessageType option. It returns nil if the message type cannot be extracted
 func (d *DHCPv4) MessageType() MessageType {
-	opt := d.GetOneOption(OptionDHCPMessageType)
-	if opt == nil {
-		return MessageTypeNone
-	}
-	return opt.(*OptMessageType).MessageType
+	return GetMessageType(d.Options)
 }
 
 // HumanXID returns a human-readably integer transaction ID.
@@ -543,28 +438,16 @@ func (d *DHCPv4) Summary() string {
 		d.BootFileName,
 	)
 	ret += "  options=\n"
-	for _, opt := range d.Options {
-		optString := opt.String()
-		// If this option has sub structures, offset them accordingly.
-		if strings.Contains(optString, "\n") {
-			optString = strings.Replace(optString, "\n  ", "\n      ", -1)
-		}
-		ret += fmt.Sprintf("    %v\n", optString)
-		if opt.Code() == OptionEnd {
-			break
-		}
-	}
+	ret += d.Options.String()
 	return ret
 }
 
 // IsOptionRequested returns true if that option is within the requested
 // options of the DHCPv4 message.
 func (d *DHCPv4) IsOptionRequested(requested OptionCode) bool {
-	for _, optprl := range d.GetOption(OptionParameterRequestList) {
-		for _, o := range optprl.(*OptParameterRequestList).RequestedOpts {
-			if o == requested {
-				return true
-			}
+	for _, o := range GetParameterRequestList(d.Options) {
+		if o == requested {
+			return true
 		}
 	}
 	return false
@@ -618,16 +501,4 @@ func (d *DHCPv4) ToBytes() []byte {
 
 	d.Options.Marshal(buf, true)
 	return buf.Data()
-}
-
-// OptionGetter is a interface that knows how to retrieve an option from a
-// structure of options given an OptionCode.
-type OptionGetter interface {
-	GetOption(OptionCode) []Option
-	GetOneOption(OptionCode) Option
-}
-
-// HasOption checks whether the OptionGetter `o` has the given `opcode` Option.
-func HasOption(o OptionGetter, opcode OptionCode) bool {
-	return o.GetOneOption(opcode) != nil
 }

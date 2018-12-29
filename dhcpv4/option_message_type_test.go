@@ -6,36 +6,21 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestOptMessageTypeInterfaceMethods(t *testing.T) {
-	o := OptMessageType{MessageType: MessageTypeDiscover}
-	require.Equal(t, OptionDHCPMessageType, o.Code(), "Code")
-	require.Equal(t, []byte{1}, o.ToBytes(), "ToBytes")
-}
-
-func TestOptMessageTypeNew(t *testing.T) {
-	o := OptMessageType{MessageType: MessageTypeDiscover}
-	require.Equal(t, OptionDHCPMessageType, o.Code())
-	require.Equal(t, MessageTypeDiscover, o.MessageType)
+func TestOptMessageType(t *testing.T) {
+	o := OptMessageType(MessageTypeDiscover)
+	require.Equal(t, OptionDHCPMessageType, o.Code, "Code")
+	require.Equal(t, []byte{1}, o.Value.ToBytes(), "ToBytes")
+	require.Equal(t, "DHCP Message Type: DISCOVER", o.String())
 }
 
 func TestParseOptMessageType(t *testing.T) {
 	data := []byte{1} // DISCOVER
-	o, err := ParseOptMessageType(data)
+	mt, err := parseOptMessageType(data)
 	require.NoError(t, err)
-	require.Equal(t, &OptMessageType{MessageType: MessageTypeDiscover}, o)
+	require.Equal(t, MessageTypeDiscover, mt.MessageType)
 
 	// Bad length
 	data = []byte{1, 2}
-	_, err = ParseOptMessageType(data)
+	_, err = parseOptMessageType(data)
 	require.Error(t, err, "should get error from bad length")
-}
-
-func TestOptMessageTypeString(t *testing.T) {
-	// known
-	o := OptMessageType{MessageType: MessageTypeDiscover}
-	require.Equal(t, "DHCP Message Type -> DISCOVER", o.String())
-
-	// unknown
-	o = OptMessageType{MessageType: 99}
-	require.Equal(t, "DHCP Message Type -> Unknown", o.String())
 }

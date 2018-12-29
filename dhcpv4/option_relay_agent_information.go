@@ -1,43 +1,49 @@
 package dhcpv4
 
 import (
-	"fmt"
-
 	"github.com/u-root/u-root/pkg/uio"
 )
 
-// This option implements the relay agent information option
-// https://tools.ietf.org/html/rfc3046
-
-// OptRelayAgentInformation is a "container" option for specific agent-supplied
+// optRelayAgentInformation is a "container" option for specific agent-supplied
 // sub-options.
-type OptRelayAgentInformation struct {
+type optRelayAgentInformation struct {
 	Options Options
 }
 
-// ParseOptRelayAgentInformation returns a new OptRelayAgentInformation from a
-// byte stream, or error if any.
-func ParseOptRelayAgentInformation(data []byte) (*OptRelayAgentInformation, error) {
-	options, err := OptionsFromBytesWithParser(data, ParseOptionGeneric, false /* don't check for OptionEnd tag */)
+func OptRelayAgentInfo(o Options) Option {
+	return Option{Code: OptionRelayAgentInformation, Value: &optRelayAgentInformation{o}}
+}
+
+// This option implements the relay agent information option
+// https://tools.ietf.org/html/rfc3046
+func GetRelayAgentInfo(o Options) Options {
+	v := o.Get(OptionRelayAgentInformation)
+	if v == nil {
+		return nil
+	}
+	r, err := parseRelayAgentInfo(v)
+	if err != nil {
+		return nil
+	}
+	return r.Options
+}
+
+func parseRelayAgentInfo(v []byte) (*optRelayAgentInformation, error) {
+	options, err := OptionsFromBytesWithParser(v, false)
 	if err != nil {
 		return nil, err
 	}
-	return &OptRelayAgentInformation{Options: options}, nil
-}
-
-// Code returns the option code.
-func (o *OptRelayAgentInformation) Code() OptionCode {
-	return OptionRelayAgentInformation
+	return &optRelayAgentInformation{options}, nil
 }
 
 // ToBytes returns a serialized stream of bytes for this option.
-func (o *OptRelayAgentInformation) ToBytes() []byte {
+func (o *optRelayAgentInformation) ToBytes() []byte {
 	buf := uio.NewBigEndianBuffer(nil)
 	o.Options.Marshal(buf, false)
 	return buf.Data()
 }
 
 // String returns a human-readable string for this option.
-func (o *OptRelayAgentInformation) String() string {
-	return fmt.Sprintf("Relay Agent Information -> %v", o.Options)
+func (o *optRelayAgentInformation) String() string {
+	return o.Options.String()
 }

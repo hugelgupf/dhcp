@@ -1,37 +1,48 @@
 package dhcpv4
 
 import (
-	"fmt"
-
 	"github.com/u-root/u-root/pkg/uio"
 )
 
 // This option implements the message type option
 // https://tools.ietf.org/html/rfc2132
 
-// OptMessageType represents the DHCP message type option.
-type OptMessageType struct {
+// optMessageType represents the DHCP message type option.
+type optMessageType struct {
 	MessageType MessageType
 }
 
-// ParseOptMessageType constructs an OptMessageType struct from a sequence of
+// parseOptMessageType constructs an OptMessageType struct from a sequence of
 // bytes and returns it, or an error.
-func ParseOptMessageType(data []byte) (*OptMessageType, error) {
+func parseOptMessageType(data []byte) (*optMessageType, error) {
 	buf := uio.NewBigEndianBuffer(data)
-	return &OptMessageType{MessageType: MessageType(buf.Read8())}, buf.FinError()
-}
-
-// Code returns the option code.
-func (o *OptMessageType) Code() OptionCode {
-	return OptionDHCPMessageType
+	return &optMessageType{MessageType(buf.Read8())}, buf.FinError()
 }
 
 // ToBytes returns a serialized stream of bytes for this option.
-func (o *OptMessageType) ToBytes() []byte {
+func (o *optMessageType) ToBytes() []byte {
 	return []byte{byte(o.MessageType)}
 }
 
 // String returns a human-readable string for this option.
-func (o *OptMessageType) String() string {
-	return fmt.Sprintf("DHCP Message Type -> %s", o.MessageType.String())
+func (o *optMessageType) String() string {
+	return o.MessageType.String()
+}
+
+// OptMessageType returns a new DHCPv4 Message Type option.
+func OptMessageType(m MessageType) Option {
+	return Option{Code: OptionDHCPMessageType, Value: &optMessageType{m}}
+}
+
+// GetMessageType returns the DHCPv4 Message Type option in o.
+func GetMessageType(o Options) MessageType {
+	v := o.Get(OptionDHCPMessageType)
+	if v == nil {
+		return MessageTypeNone
+	}
+	mt, err := parseOptMessageType(v)
+	if err != nil {
+		return MessageTypeNone
+	}
+	return mt.MessageType
 }

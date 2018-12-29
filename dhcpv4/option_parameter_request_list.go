@@ -10,29 +10,24 @@ import (
 // This option implements the parameter request list option
 // https://tools.ietf.org/html/rfc2132
 
-// OptParameterRequestList represents the parameter request list option.
-type OptParameterRequestList struct {
+// optParameterRequestList represents the parameter request list option.
+type optParameterRequestList struct {
 	RequestedOpts []OptionCode
 }
 
-// ParseOptParameterRequestList returns a new OptParameterRequestList from a
+// parseOptParameterRequestList returns a new OptParameterRequestList from a
 // byte stream, or error if any.
-func ParseOptParameterRequestList(data []byte) (*OptParameterRequestList, error) {
+func parseOptParameterRequestList(data []byte) (*optParameterRequestList, error) {
 	buf := uio.NewBigEndianBuffer(data)
 	requestedOpts := make([]OptionCode, 0, buf.Len())
 	for buf.Len() > 0 {
 		requestedOpts = append(requestedOpts, OptionCode(buf.Read8()))
 	}
-	return &OptParameterRequestList{RequestedOpts: requestedOpts}, buf.Error()
-}
-
-// Code returns the option code.
-func (o *OptParameterRequestList) Code() OptionCode {
-	return OptionParameterRequestList
+	return &optParameterRequestList{requestedOpts}, buf.Error()
 }
 
 // ToBytes returns a serialized stream of bytes for this option.
-func (o *OptParameterRequestList) ToBytes() []byte {
+func (o *optParameterRequestList) ToBytes() []byte {
 	buf := uio.NewBigEndianBuffer(nil)
 	for _, req := range o.RequestedOpts {
 		buf.Write8(uint8(req))
@@ -41,7 +36,7 @@ func (o *OptParameterRequestList) ToBytes() []byte {
 }
 
 // String returns a human-readable string for this option.
-func (o *OptParameterRequestList) String() string {
+func (o *optParameterRequestList) String() string {
 	var optNames []string
 	for _, ro := range o.RequestedOpts {
 		name := ro.String()
@@ -50,5 +45,23 @@ func (o *OptParameterRequestList) String() string {
 		}
 		optNames = append(optNames, name)
 	}
-	return fmt.Sprintf("Parameter Request List -> [%v]", strings.Join(optNames, ", "))
+	return strings.Join(optNames, ", ")
+}
+
+// GetParameterRequestList returns the DHCPv4 Parameter Request List in o.
+func GetParameterRequestList(o Options) []OptionCode {
+	v := o.Get(OptionParameterRequestList)
+	if v == nil {
+		return nil
+	}
+	codes, err := parseOptParameterRequestList(v)
+	if err != nil {
+		return nil
+	}
+	return codes.RequestedOpts
+}
+
+// OptParameterRequestList returns a new DHCPv4 Parameter Request List.
+func OptParameterRequestList(codes ...OptionCode) Option {
+	return Option{Code: OptionParameterRequestList, Value: &optParameterRequestList{codes}}
 }

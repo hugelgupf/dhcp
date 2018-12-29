@@ -11,21 +11,48 @@ import (
 // This option implements the User Class option
 // https://tools.ietf.org/html/rfc3004
 
-// OptUserClass represents an option encapsulating User Classes.
-type OptUserClass struct {
+// UserClass represents an option encapsulating User Classes.
+type UserClass struct {
 	UserClasses [][]byte
-	Rfc3004     bool
+	RFC3004     bool
 }
 
-// Code returns the option code
-func (op *OptUserClass) Code() OptionCode {
-	return OptionUserClassInformation
+func GetUserClass(o Options) *UserClass {
+	v := o.Get(OptionUserClassInformation)
+	if v == nil {
+		return nil
+	}
+	uc, err := parseOptUserClass(v)
+	if err != nil {
+		return nil
+	}
+	return uc
+}
+
+func OptUserClass(v []byte) Option {
+	return Option{
+		Code: OptionUserClassInformation,
+		Value: &UserClass{
+			UserClasses: [][]byte{v},
+			RFC3004:     false,
+		},
+	}
+}
+
+func OptRFC3004UserClass(v [][]byte) Option {
+	return Option{
+		Code: OptionUserClassInformation,
+		Value: &UserClass{
+			UserClasses: v,
+			RFC3004:     true,
+		},
+	}
 }
 
 // ToBytes serializes the option and returns it as a sequence of bytes
-func (op *OptUserClass) ToBytes() []byte {
+func (op *UserClass) ToBytes() []byte {
 	buf := uio.NewBigEndianBuffer(nil)
-	if !op.Rfc3004 {
+	if !op.RFC3004 {
 		buf.WriteBytes(op.UserClasses[0])
 	} else {
 		for _, uc := range op.UserClasses {
@@ -36,22 +63,22 @@ func (op *OptUserClass) ToBytes() []byte {
 	return buf.Data()
 }
 
-func (op *OptUserClass) String() string {
+func (op *UserClass) String() string {
 	ucStrings := make([]string, 0, len(op.UserClasses))
-	if !op.Rfc3004 {
+	if !op.RFC3004 {
 		ucStrings = append(ucStrings, string(op.UserClasses[0]))
 	} else {
 		for _, uc := range op.UserClasses {
 			ucStrings = append(ucStrings, string(uc))
 		}
 	}
-	return fmt.Sprintf("User Class Information -> %v", strings.Join(ucStrings, ", "))
+	return strings.Join(ucStrings, ", ")
 }
 
-// ParseOptUserClass returns a new OptUserClass from a byte stream or
+// parseOptUserClass returns a new OptUserClass from a byte stream or
 // error if any
-func ParseOptUserClass(data []byte) (*OptUserClass, error) {
-	opt := OptUserClass{}
+func parseOptUserClass(data []byte) (*UserClass, error) {
+	var opt UserClass
 	buf := uio.NewBigEndianBuffer(data)
 
 	// Check if option is Microsoft style instead of RFC compliant, issue #113
@@ -70,7 +97,7 @@ func ParseOptUserClass(data []byte) (*OptUserClass, error) {
 		opt.UserClasses = append(opt.UserClasses, data)
 		return &opt, nil
 	}
-	opt.Rfc3004 = true
+	opt.RFC3004 = true
 	for buf.Has(1) {
 		ucLen := buf.Read8()
 		if ucLen == 0 {

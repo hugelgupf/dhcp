@@ -179,65 +179,39 @@ func TestGetOption(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	hostnameOpt := &OptionGeneric{OptionCode: OptionHostName, Data: []byte("darkstar")}
-	bootFileOpt1 := &OptBootfileName{"boot.img"}
-	bootFileOpt2 := &OptBootfileName{"boot2.img"}
-	d.AddOption(hostnameOpt)
-	d.AddOption(&OptBootfileName{"boot.img"})
-	d.AddOption(&OptBootfileName{"boot2.img"})
-
-	require.Equal(t, d.GetOption(OptionHostName), []Option{hostnameOpt})
-	require.Equal(t, d.GetOption(OptionBootfileName), []Option{bootFileOpt1, bootFileOpt2})
-	require.Equal(t, d.GetOption(OptionRouter), []Option{})
-
-	require.Equal(t, d.GetOneOption(OptionHostName), hostnameOpt)
-	require.Equal(t, d.GetOneOption(OptionBootfileName), bootFileOpt1)
-	require.Equal(t, d.GetOneOption(OptionRouter), nil)
-}
-
-func TestAddOption(t *testing.T) {
-	d, err := New()
-	require.NoError(t, err)
-
-	hostnameOpt := &OptionGeneric{OptionCode: OptionHostName, Data: []byte("darkstar")}
-	bootFileOpt1 := &OptionGeneric{OptionCode: OptionBootfileName, Data: []byte("boot.img")}
-	bootFileOpt2 := &OptionGeneric{OptionCode: OptionBootfileName, Data: []byte("boot2.img")}
+	hostnameOpt := OptGeneric(OptionHostName, []byte("darkstar"))
+	bootFileOpt1 := OptBootFileName("boot.img")
 	d.AddOption(hostnameOpt)
 	d.AddOption(bootFileOpt1)
-	d.AddOption(bootFileOpt2)
 
-	options := d.Options
-	require.Equal(t, len(options), 4)
-	require.Equal(t, options[3].Code(), OptionEnd)
+	require.Equal(t, d.GetOption(OptionHostName), []byte("darkstar"))
+	require.Equal(t, d.GetOption(OptionBootfileName), []byte("boot.img"))
 }
 
 func TestUpdateOption(t *testing.T) {
 	d, err := New()
 	require.NoError(t, err)
-	require.Equal(t, 1, len(d.Options))
-	require.Equal(t, OptionEnd, d.Options[0].Code())
+	require.Equal(t, 0, len(d.Options))
 	// test that it will add the option since it's missing
-	d.UpdateOption(&OptDomainName{DomainName: "slackware.it"})
-	require.Equal(t, 2, len(d.Options))
-	require.Equal(t, OptionDomainName, d.Options[0].Code())
-	require.Equal(t, OptionEnd, d.Options[1].Code())
+	d.UpdateOption(OptDomainName("slackware.it"))
+	require.Equal(t, 1, len(d.Options))
+	require.Equal(t, "slackware.it", GetDomainName(d.Options))
 	// test that it won't add another option of the same type
-	d.UpdateOption(&OptDomainName{DomainName: "slackware.it"})
-	require.Equal(t, 2, len(d.Options))
-	require.Equal(t, OptionDomainName, d.Options[0].Code())
-	require.Equal(t, OptionEnd, d.Options[1].Code())
+	d.UpdateOption(OptDomainName("slackware.it2"))
+	require.Equal(t, 1, len(d.Options))
+	require.Equal(t, "slackware.it2", GetDomainName(d.Options))
 }
 
 func TestDHCPv4NewRequestFromOffer(t *testing.T) {
 	offer, err := New()
 	require.NoError(t, err)
 	offer.SetBroadcast()
-	offer.AddOption(&OptMessageType{MessageType: MessageTypeOffer})
+	offer.AddOption(OptMessageType(MessageTypeOffer))
 	req, err := NewRequestFromOffer(offer)
 	require.Error(t, err)
 
 	// Now add the option so it doesn't error out.
-	offer.AddOption(&OptServerIdentifier{ServerID: net.IPv4(192, 168, 0, 1)})
+	offer.AddOption(OptServerIdentifier(net.IPv4(192, 168, 0, 1)))
 
 	// Broadcast request
 	req, err = NewRequestFromOffer(offer)
@@ -257,13 +231,12 @@ func TestDHCPv4NewRequestFromOffer(t *testing.T) {
 func TestDHCPv4NewRequestFromOfferWithModifier(t *testing.T) {
 	offer, err := New()
 	require.NoError(t, err)
-	offer.AddOption(&OptMessageType{MessageType: MessageTypeOffer})
-	offer.AddOption(&OptServerIdentifier{ServerID: net.IPv4(192, 168, 0, 1)})
+	offer.AddOption(OptMessageType(MessageTypeOffer))
+	offer.AddOption(OptServerIdentifier(net.IPv4(192, 168, 0, 1)))
 	userClass := WithUserClass([]byte("linuxboot"), false)
 	req, err := NewRequestFromOffer(offer, userClass)
 	require.NoError(t, err)
 	require.Equal(t, MessageTypeRequest, req.MessageType())
-	require.Equal(t, "User Class Information -> linuxboot", req.Options[3].String())
 }
 
 func TestNewReplyFromRequest(t *testing.T) {
@@ -285,7 +258,6 @@ func TestNewReplyFromRequestWithModifier(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, discover.TransactionID, reply.TransactionID)
 	require.Equal(t, discover.GatewayIPAddr, reply.GatewayIPAddr)
-	require.Equal(t, "User Class Information -> linuxboot", reply.Options[0].String())
 }
 
 func TestDHCPv4MessageTypeNil(t *testing.T) {
@@ -305,8 +277,7 @@ func TestNewDiscovery(t *testing.T) {
 	require.Equal(t, iana.HWTypeEthernet, m.HWType)
 	require.Equal(t, hwAddr, m.ClientHWAddr)
 	require.True(t, m.IsBroadcast())
-	require.True(t, HasOption(m, OptionParameterRequestList))
-	require.True(t, HasOption(m, OptionEnd))
+	require.True(t, m.Options.Has(OptionParameterRequestList))
 }
 
 func TestNewInform(t *testing.T) {
@@ -327,8 +298,8 @@ func TestIsOptionRequested(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, pkt.IsOptionRequested(OptionDomainNameServer))
 
-	optprl := OptParameterRequestList{RequestedOpts: []OptionCode{OptionDomainNameServer}}
-	pkt.AddOption(&optprl)
+	optprl := OptParameterRequestList(OptionDomainNameServer)
+	pkt.AddOption(optprl)
 	require.True(t, pkt.IsOptionRequested(OptionDomainNameServer))
 }
 

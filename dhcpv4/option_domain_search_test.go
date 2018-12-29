@@ -12,7 +12,7 @@ func TestParseOptDomainSearch(t *testing.T) {
 		7, 'e', 'x', 'a', 'm', 'p', 'l', 'e', 3, 'c', 'o', 'm', 0,
 		6, 's', 'u', 'b', 'n', 'e', 't', 7, 'e', 'x', 'a', 'm', 'p', 'l', 'e', 3, 'o', 'r', 'g', 0,
 	}
-	opt, err := ParseOptDomainSearch(data)
+	opt, err := parseDomainSearch(data)
 	require.NoError(t, err)
 	require.Equal(t, 2, len(opt.DomainSearch.Labels))
 	require.Equal(t, data, opt.DomainSearch.ToBytes())
@@ -25,13 +25,12 @@ func TestOptDomainSearchToBytes(t *testing.T) {
 		7, 'e', 'x', 'a', 'm', 'p', 'l', 'e', 3, 'c', 'o', 'm', 0,
 		6, 's', 'u', 'b', 'n', 'e', 't', 7, 'e', 'x', 'a', 'm', 'p', 'l', 'e', 3, 'o', 'r', 'g', 0,
 	}
-	opt := OptDomainSearch{
-		DomainSearch: &rfc1035label.Labels{
-			Labels: []string{
-				"example.com",
-				"subnet.example.org",
-			},
+	opt := OptDomainSearch(&rfc1035label.Labels{
+		Labels: []string{
+			"example.com",
+			"subnet.example.org",
 		},
-	}
-	require.Equal(t, opt.ToBytes(), expected)
+	},
+	)
+	require.Equal(t, opt.Value.ToBytes(), expected)
 }

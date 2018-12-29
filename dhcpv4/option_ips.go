@@ -11,26 +11,29 @@ import (
 // This option implements the router option
 // https://tools.ietf.org/html/rfc2132
 
-// ParseIPs parses an IPv4 address from a DHCP packet as used and specified by
-// options in RFC 2132, Sections 3.5 through 3.13, 8.2, 8.3, 8.5, 8.6, 8.9, and
-// 8.10.
-func ParseIPs(data []byte) ([]net.IP, error) {
+// IPs are IPv4 addresses from a DHCP packet as used and specified by options
+// in RFC 2132, Sections 3.5 through 3.13, 8.2, 8.3, 8.5, 8.6, 8.9, and 8.10.
+//
+// IPs implements the OptionValue type.
+type IPs []net.IP
+
+func parseIPs(data []byte) (IPs, error) {
 	buf := uio.NewBigEndianBuffer(data)
 
 	if buf.Len() == 0 {
 		return nil, fmt.Errorf("IP DHCP options must always list at least one IP")
 	}
 
-	ips := make([]net.IP, 0, buf.Len()/net.IPv4len)
+	ips := make(IPs, 0, buf.Len()/net.IPv4len)
 	for buf.Has(net.IPv4len) {
 		ips = append(ips, net.IP(buf.CopyN(net.IPv4len)))
 	}
 	return ips, buf.FinError()
 }
 
-// IPsToBytes marshals an IPv4 address to a DHCP packet as specified by RFC
-// 2132, Section 3.5 et al.
-func IPsToBytes(i []net.IP) []byte {
+// ToBytes marshals IPv4 addresses to a DHCP packet as specified by RFC 2132,
+// Section 3.5 et al.
+func (i IPs) ToBytes() []byte {
 	buf := uio.NewBigEndianBuffer(nil)
 
 	for _, ip := range i {
@@ -39,8 +42,8 @@ func IPsToBytes(i []net.IP) []byte {
 	return buf.Data()
 }
 
-// IPsToString returns a human-readable representation of a list of IPs.
-func IPsToString(i []net.IP) string {
+// String returns a human-readable representation of a list of IPs.
+func (i IPs) String() string {
 	s := make([]string, 0, len(i))
 	for _, ip := range i {
 		s = append(s, ip.String())
@@ -48,91 +51,78 @@ func IPsToString(i []net.IP) string {
 	return strings.Join(s, ", ")
 }
 
-// OptRouter represents an option encapsulating the routers.
-type OptRouter struct {
-	Routers []net.IP
-}
-
-// ParseOptRouter returns a new OptRouter from a byte stream, or error if any.
-func ParseOptRouter(data []byte) (*OptRouter, error) {
-	ips, err := ParseIPs(data)
-	if err != nil {
-		return nil, err
+// GetRouter finds and parses the DHCPv4 Router option.
+func GetRouter(o Options) []net.IP {
+	v := o.Get(OptionRouter)
+	if v == nil {
+		return nil
 	}
-	return &OptRouter{Routers: ips}, nil
-}
-
-// Code returns the option code.
-func (o *OptRouter) Code() OptionCode {
-	return OptionRouter
-}
-
-// ToBytes returns a serialized stream of bytes for this option.
-func (o *OptRouter) ToBytes() []byte {
-	return IPsToBytes(o.Routers)
-}
-
-// String returns a human-readable string.
-func (o *OptRouter) String() string {
-	return fmt.Sprintf("Routers -> %s", IPsToString(o.Routers))
-}
-
-// OptNTPServers represents an option encapsulating the NTP servers.
-type OptNTPServers struct {
-	NTPServers []net.IP
-}
-
-// ParseOptNTPServers returns a new OptNTPServers from a byte stream, or error if any.
-func ParseOptNTPServers(data []byte) (*OptNTPServers, error) {
-	ips, err := ParseIPs(data)
+	ips, err := parseIPs(v)
 	if err != nil {
-		return nil, err
+		return nil
 	}
-	return &OptNTPServers{NTPServers: ips}, nil
+	return []net.IP(ips)
 }
 
-// Code returns the option code.
-func (o *OptNTPServers) Code() OptionCode {
-	return OptionNTPServers
+// OptRouter returns a DHCPv4 Router option.
+func OptRouter(routers ...net.IP) Option {
+	return Option{
+		Code:  OptionRouter,
+		Value: IPs(routers),
+	}
 }
 
-// ToBytes returns a serialized stream of bytes for this option.
-func (o *OptNTPServers) ToBytes() []byte {
-	return IPsToBytes(o.NTPServers)
+// WithRouter updates a packet with the DHCPv4 Router option.
+func WithRouter(routers ...net.IP) Modifier {
+	return func(d *DHCPv4) *DHCPv4 {
+		d.UpdateOption(OptRouter(routers...))
+		return d
+	}
 }
 
-// String returns a human-readable string.
-func (o *OptNTPServers) String() string {
-	return fmt.Sprintf("NTP Servers -> %v", IPsToString(o.NTPServers))
-}
-
-// OptDomainNameServer represents an option encapsulating the domain name
-// servers.
-type OptDomainNameServer struct {
-	NameServers []net.IP
-}
-
-// ParseOptDomainNameServer returns a new OptDomainNameServer from a byte
-// stream, or error if any.
-func ParseOptDomainNameServer(data []byte) (*OptDomainNameServer, error) {
-	ips, err := ParseIPs(data)
+// GetNTPServers finds and parses the DHCPv4 NTP Servers option.
+func GetNTPServers(o Options) []net.IP {
+	v := o.Get(OptionNTPServers)
+	if v == nil {
+		return nil
+	}
+	ips, err := parseIPs(v)
 	if err != nil {
-		return nil, err
+		return nil
 	}
-	return &OptDomainNameServer{NameServers: ips}, nil
+	return []net.IP(ips)
 }
 
-// Code returns the option code.
-func (o *OptDomainNameServer) Code() OptionCode {
-	return OptionDomainNameServer
+// OptNTPServers returns a DHCPv4 NTP Server option.
+func OptNTPServers(ntpServers ...net.IP) Option {
+	return Option{
+		Code:  OptionNTPServers,
+		Value: IPs(ntpServers),
+	}
 }
 
-// ToBytes returns a serialized stream of bytes for this option.
-func (o *OptDomainNameServer) ToBytes() []byte {
-	return IPsToBytes(o.NameServers)
+// GetDNS finds and parses the DHCPv4 Domain Name Server option.
+func GetDNS(o Options) []net.IP {
+	v := o.Get(OptionDomainNameServer)
+	if v == nil {
+		return nil
+	}
+	ips, err := parseIPs(v)
+	if err != nil {
+		return nil
+	}
+	return []net.IP(ips)
 }
 
-// String returns a human-readable string.
-func (o *OptDomainNameServer) String() string {
-	return fmt.Sprintf("Domain Name Servers -> %s", IPsToString(o.NameServers))
+// OptDNS returns a DHCPv4 Domain Name Server option.
+func OptDNS(servers ...net.IP) Option {
+	return Option{
+		Code:  OptionDomainNameServer,
+		Value: IPs(servers),
+	}
+}
+
+// WtihDNS modifies a packet with the DHCPv4 Domain Name Server option.
+func WithDNS(servers ...net.IP) Modifier {
+	return WithOption(OptDNS(servers...))
 }

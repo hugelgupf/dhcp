@@ -10,19 +10,32 @@ import (
 	"github.com/u-root/u-root/pkg/uio"
 )
 
-// OptClientArchType represents an option encapsulating the Client System
+// optClientArchType represents an option encapsulating the Client System
 // Architecture Type option Definition.
-type OptClientArchType struct {
+type optClientArchType struct {
 	ArchTypes []iana.Arch
 }
 
-// Code returns the option code.
-func (o *OptClientArchType) Code() OptionCode {
-	return OptionClientSystemArchitectureType
+// OptClientArch returns a new Client System Architecture Type option.
+func OptClientArch(archs ...iana.Arch) Option {
+	return Option{Code: OptionClientSystemArchitectureType, Value: &optClientArchType{archs}}
+}
+
+// GetClientArch returns the Client System Architecture Type option.
+func GetClientArch(o Options) []iana.Arch {
+	v := o.Get(OptionClientSystemArchitectureType)
+	if v == nil {
+		return nil
+	}
+	archs, err := parseOptClientArchType(v)
+	if err != nil {
+		return nil
+	}
+	return archs.ArchTypes
 }
 
 // ToBytes returns a serialized stream of bytes for this option.
-func (o *OptClientArchType) ToBytes() []byte {
+func (o *optClientArchType) ToBytes() []byte {
 	buf := uio.NewBigEndianBuffer(nil)
 	for _, at := range o.ArchTypes {
 		buf.Write16(uint16(at))
@@ -31,7 +44,7 @@ func (o *OptClientArchType) ToBytes() []byte {
 }
 
 // String returns a human-readable string.
-func (o *OptClientArchType) String() string {
+func (o *optClientArchType) String() string {
 	var archTypes string
 	for idx, at := range o.ArchTypes {
 		archTypes += at.String()
@@ -39,12 +52,12 @@ func (o *OptClientArchType) String() string {
 			archTypes += ", "
 		}
 	}
-	return fmt.Sprintf("Client System Architecture Type -> %v", archTypes)
+	return archTypes
 }
 
-// ParseOptClientArchType returns a new OptClientArchType from a byte stream,
+// parseOptClientArchType returns a new OptClientArchType from a byte stream,
 // or error if any.
-func ParseOptClientArchType(data []byte) (*OptClientArchType, error) {
+func parseOptClientArchType(data []byte) (*optClientArchType, error) {
 	buf := uio.NewBigEndianBuffer(data)
 	if buf.Len() == 0 {
 		return nil, fmt.Errorf("must have at least one archtype if option is present")
@@ -54,5 +67,5 @@ func ParseOptClientArchType(data []byte) (*OptClientArchType, error) {
 	for buf.Has(2) {
 		archTypes = append(archTypes, iana.Arch(buf.Read16()))
 	}
-	return &OptClientArchType{ArchTypes: archTypes}, buf.FinError()
+	return &optClientArchType{archTypes}, buf.FinError()
 }

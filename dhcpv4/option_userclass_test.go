@@ -7,11 +7,8 @@ import (
 )
 
 func TestOptUserClassToBytes(t *testing.T) {
-	opt := OptUserClass{
-		UserClasses: [][]byte{[]byte("linuxboot")},
-		Rfc3004:     true,
-	}
-	data := opt.ToBytes()
+	opt := OptRFC3004UserClass([][]byte{[]byte("linuxboot")})
+	data := opt.Value.ToBytes()
 	expected := []byte{
 		9, 'l', 'i', 'n', 'u', 'x', 'b', 'o', 'o', 't',
 	}
@@ -19,10 +16,8 @@ func TestOptUserClassToBytes(t *testing.T) {
 }
 
 func TestOptUserClassMicrosoftToBytes(t *testing.T) {
-	opt := OptUserClass{
-		UserClasses: [][]byte{[]byte("linuxboot")},
-	}
-	data := opt.ToBytes()
+	opt := OptUserClass([]byte("linuxboot"))
+	data := opt.Value.ToBytes()
 	expected := []byte{
 		'l', 'i', 'n', 'u', 'x', 'b', 'o', 'o', 't',
 	}
@@ -34,7 +29,7 @@ func TestParseOptUserClassMultiple(t *testing.T) {
 		9, 'l', 'i', 'n', 'u', 'x', 'b', 'o', 'o', 't',
 		4, 't', 'e', 's', 't',
 	}
-	opt, err := ParseOptUserClass(expected)
+	opt, err := parseOptUserClass(expected)
 	require.NoError(t, err)
 	require.Equal(t, len(opt.UserClasses), 2)
 	require.Equal(t, []byte("linuxboot"), opt.UserClasses[0])
@@ -43,7 +38,7 @@ func TestParseOptUserClassMultiple(t *testing.T) {
 
 func TestParseOptUserClassNone(t *testing.T) {
 	expected := []byte{}
-	_, err := ParseOptUserClass(expected)
+	_, err := parseOptUserClass(expected)
 	require.Error(t, err)
 }
 
@@ -51,7 +46,7 @@ func TestParseOptUserClassMicrosoft(t *testing.T) {
 	expected := []byte{
 		'l', 'i', 'n', 'u', 'x', 'b', 'o', 'o', 't',
 	}
-	opt, err := ParseOptUserClass(expected)
+	opt, err := parseOptUserClass(expected)
 	require.NoError(t, err)
 	require.Equal(t, 1, len(opt.UserClasses))
 	require.Equal(t, []byte("linuxboot"), opt.UserClasses[0])
@@ -61,7 +56,7 @@ func TestParseOptUserClassMicrosoftShort(t *testing.T) {
 	expected := []byte{
 		'l',
 	}
-	opt, err := ParseOptUserClass(expected)
+	opt, err := parseOptUserClass(expected)
 	require.NoError(t, err)
 	require.Equal(t, 1, len(opt.UserClasses))
 	require.Equal(t, []byte("l"), opt.UserClasses[0])
@@ -71,21 +66,20 @@ func TestParseOptUserClass(t *testing.T) {
 	expected := []byte{
 		9, 'l', 'i', 'n', 'u', 'x', 'b', 'o', 'o', 't',
 	}
-	opt, err := ParseOptUserClass(expected)
+	opt, err := parseOptUserClass(expected)
 	require.NoError(t, err)
 	require.Equal(t, 1, len(opt.UserClasses))
 	require.Equal(t, []byte("linuxboot"), opt.UserClasses[0])
 }
 
 func TestOptUserClassToBytesMultiple(t *testing.T) {
-	opt := OptUserClass{
-		UserClasses: [][]byte{
+	opt := OptRFC3004UserClass(
+		[][]byte{
 			[]byte("linuxboot"),
 			[]byte("test"),
 		},
-		Rfc3004: true,
-	}
-	data := opt.ToBytes()
+	)
+	data := opt.Value.ToBytes()
 	expected := []byte{
 		9, 'l', 'i', 'n', 'u', 'x', 'b', 'o', 'o', 't',
 		4, 't', 'e', 's', 't',
@@ -97,11 +91,6 @@ func TestParseOptUserClassZeroLength(t *testing.T) {
 	expected := []byte{
 		0, 0,
 	}
-	_, err := ParseOptUserClass(expected)
+	_, err := parseOptUserClass(expected)
 	require.Error(t, err)
-}
-
-func TestOptUserClassCode(t *testing.T) {
-	opt := OptUserClass{}
-	require.Equal(t, OptionUserClassInformation, opt.Code())
 }

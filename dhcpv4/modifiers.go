@@ -2,6 +2,7 @@ package dhcpv4
 
 import (
 	"net"
+	"time"
 
 	"github.com/insomniacslk/dhcp/rfc1035label"
 )
@@ -48,62 +49,24 @@ func WithOption(opt Option) Modifier {
 func WithUserClass(uc []byte, rfc bool) Modifier {
 	// TODO let the user specify multiple user classes
 	return func(d *DHCPv4) *DHCPv4 {
-		ouc := OptUserClass{
-			UserClasses: [][]byte{uc},
-			Rfc3004:     rfc,
+		if rfc {
+			d.AddOption(OptRFC3004UserClass([][]byte{uc}))
+		} else {
+			d.AddOption(OptUserClass(uc))
 		}
-		d.AddOption(&ouc)
 		return d
 	}
 }
 
 // WithNetboot adds bootfile URL and bootfile param options to a DHCPv4 packet.
 func WithNetboot(d *DHCPv4) *DHCPv4 {
-	params := d.GetOneOption(OptionParameterRequestList)
-
-	var (
-		OptParams                 *OptParameterRequestList
-		foundOptionTFTPServerName bool
-		foundOptionBootfileName   bool
-	)
-	if params != nil {
-		OptParams = params.(*OptParameterRequestList)
-		for _, option := range OptParams.RequestedOpts {
-			if option == OptionTFTPServerName {
-				foundOptionTFTPServerName = true
-			} else if option == OptionBootfileName {
-				foundOptionBootfileName = true
-			}
-		}
-		if !foundOptionTFTPServerName {
-			OptParams.RequestedOpts = append(OptParams.RequestedOpts, OptionTFTPServerName)
-		}
-		if !foundOptionBootfileName {
-			OptParams.RequestedOpts = append(OptParams.RequestedOpts, OptionBootfileName)
-		}
-	} else {
-		OptParams = &OptParameterRequestList{
-			RequestedOpts: []OptionCode{OptionTFTPServerName, OptionBootfileName},
-		}
-		d.AddOption(OptParams)
-	}
+	d.AddOption(OptParameterRequestList(OptionTFTPServerName, OptionBootfileName))
 	return d
 }
 
-// WithRequestedOptions adds requested options to the packet
+// WithRequestedOptions adds requested options to the packet.
 func WithRequestedOptions(optionCodes ...OptionCode) Modifier {
-	return func(d *DHCPv4) *DHCPv4 {
-		params := d.GetOneOption(OptionParameterRequestList)
-		if params == nil {
-			params = &OptParameterRequestList{}
-			d.AddOption(params)
-		}
-		opts := params.(*OptParameterRequestList)
-		for _, optionCode := range optionCodes {
-			opts.RequestedOpts = append(opts.RequestedOpts, optionCode)
-		}
-		return d
-	}
+	return WithOption(OptParameterRequestList(optionCodes...))
 }
 
 // WithRelay adds parameters required for DHCPv4 to be relayed by the relay
@@ -117,33 +80,10 @@ func WithRelay(ip net.IP) Modifier {
 	}
 }
 
-// WithNetmask adds or updates an OptSubnetMask
-func WithNetmask(mask net.IPMask) Modifier {
-	return func(d *DHCPv4) *DHCPv4 {
-		osm := OptSubnetMask{
-			SubnetMask: mask,
-		}
-		d.UpdateOption(&osm)
-		return d
-	}
-}
-
 // WithLeaseTime adds or updates an OptIPAddressLeaseTime
-func WithLeaseTime(leaseTime uint32) Modifier {
+func WithLeaseTime(leaseDuration time.Duration) Modifier {
 	return func(d *DHCPv4) *DHCPv4 {
-		olt := OptIPAddressLeaseTime{
-			LeaseTime: leaseTime,
-		}
-		d.UpdateOption(&olt)
-		return d
-	}
-}
-
-// WithDNS adds or updates an OptionDomainNameServer
-func WithDNS(dnses ...net.IP) Modifier {
-	return func(d *DHCPv4) *DHCPv4 {
-		odns := OptDomainNameServer{NameServers: dnses}
-		d.UpdateOption(&odns)
+		d.UpdateOption(OptIPAddressLeaseTime(leaseDuration))
 		return d
 	}
 }
@@ -154,17 +94,8 @@ func WithDomainSearchList(searchList ...string) Modifier {
 		labels := rfc1035label.Labels{
 			Labels: searchList,
 		}
-		odsl := OptDomainSearch{DomainSearch: &labels}
-		d.UpdateOption(&odsl)
-		return d
-	}
-}
-
-// WithRouter adds or updates an OptionRouter
-func WithRouter(routers ...net.IP) Modifier {
-	return func(d *DHCPv4) *DHCPv4 {
-		ortr := OptRouter{Routers: routers}
-		d.UpdateOption(&ortr)
+		odsl := OptDomainSearch(&labels)
+		d.UpdateOption(odsl)
 		return d
 	}
 }
