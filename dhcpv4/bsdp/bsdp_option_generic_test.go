@@ -7,19 +7,11 @@ import (
 )
 
 func TestParseOptGeneric(t *testing.T) {
-	// Empty bytestream produces error
-	_, err := ParseOptGeneric([]byte{})
-	require.Error(t, err, "error from empty bytestream")
-
 	// Good parse
-	o, err := ParseOptGeneric([]byte{1, 1, 1})
+	o, err := ParseOptGeneric(OptionMessageType, []byte{1})
 	require.NoError(t, err)
 	require.Equal(t, OptionMessageType, o.Code())
 	require.Equal(t, MessageTypeList, MessageType(o.Data[0]))
-
-	// Bad parse
-	o, err = ParseOptGeneric([]byte{1, 2, 1})
-	require.Error(t, err, "invalid length")
 }
 
 func TestOptGenericCode(t *testing.T) {
@@ -44,7 +36,7 @@ func TestOptGenericToBytes(t *testing.T) {
 		Data:       []byte{192, 168, 0, 1},
 	}
 	serialized := o.ToBytes()
-	expected := []byte{3, 4, 192, 168, 0, 1}
+	expected := []byte{192, 168, 0, 1}
 	require.Equal(t, expected, serialized)
 }
 

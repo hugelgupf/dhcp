@@ -4,9 +4,8 @@ import (
 	"fmt"
 
 	"github.com/insomniacslk/dhcp/dhcpv4"
+	"github.com/u-root/u-root/pkg/uio"
 )
-
-// Implements the BSDP option version. Can be one of 1.0 or 1.1
 
 // Specific versions.
 var (
@@ -15,6 +14,8 @@ var (
 )
 
 // OptVersion represents a BSDP protocol version.
+//
+// Implements the BSDP option version. Can be one of 1.0 or 1.1
 type OptVersion struct {
 	Version []byte
 }
@@ -22,18 +23,8 @@ type OptVersion struct {
 // ParseOptVersion constructs an OptVersion struct from a sequence of
 // bytes and returns it, or an error.
 func ParseOptVersion(data []byte) (*OptVersion, error) {
-	if len(data) < 4 {
-		return nil, dhcpv4.ErrShortByteStream
-	}
-	code := dhcpv4.OptionCode(data[0])
-	if code != OptionVersion {
-		return nil, fmt.Errorf("expected option %v, got %v instead", OptionVersion, code)
-	}
-	length := int(data[1])
-	if length != 2 {
-		return nil, fmt.Errorf("expected length 2, got %d instead", length)
-	}
-	return &OptVersion{data[2:4]}, nil
+	buf := uio.NewBigEndianBuffer(data)
+	return &OptVersion{buf.CopyN(2)}, buf.FinError()
 }
 
 // Code returns the option code.
@@ -43,7 +34,7 @@ func (o *OptVersion) Code() dhcpv4.OptionCode {
 
 // ToBytes returns a serialized stream of bytes for this option.
 func (o *OptVersion) ToBytes() []byte {
-	return append([]byte{byte(o.Code()), 2}, o.Version...)
+	return o.Version
 }
 
 // String returns a human-readable string for this option.

@@ -23,7 +23,7 @@ const AppleVendorID = "AAPLBSDPC"
 type ReplyConfig struct {
 	ServerIP                     net.IP
 	ServerHostname, BootFileName string
-	ServerPriority               int
+	ServerPriority               uint16
 	Images                       []BootImage
 	DefaultImage, SelectedImage  *BootImage
 }

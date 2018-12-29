@@ -1,8 +1,9 @@
 package bsdp
 
 import (
-	"encoding/binary"
 	"fmt"
+
+	"github.com/u-root/u-root/pkg/uio"
 )
 
 // BootImageType represents the different BSDP boot image types.
@@ -34,15 +35,16 @@ type BootImageID struct {
 	Index     uint16
 }
 
-// ToBytes serializes a BootImageID to network-order bytes.
-func (b BootImageID) ToBytes() []byte {
-	bytes := make([]byte, 4)
+// Marshal writes the binary representation to buf.
+func (b BootImageID) Marshal(buf *uio.Lexer) {
+	var byte0 byte
 	if b.IsInstall {
-		bytes[0] |= 0x80
+		byte0 |= 0x80
 	}
-	bytes[0] |= byte(b.ImageType)
-	binary.BigEndian.PutUint16(bytes[2:], b.Index)
-	return bytes
+	byte0 |= byte(b.ImageType)
+	buf.Write8(byte0)
+	buf.Write8(byte(0))
+	buf.Write16(b.Index)
 }
 
 // String converts a BootImageID to a human-readable representation.
@@ -60,16 +62,14 @@ func (b BootImageID) String() string {
 	return s + " " + t + " image"
 }
 
-// BootImageIDFromBytes deserializes a collection of 4 bytes to a BootImageID.
-func BootImageIDFromBytes(bytes []byte) (*BootImageID, error) {
-	if len(bytes) < 4 {
-		return nil, fmt.Errorf("not enough bytes to serialize BootImageID")
-	}
-	return &BootImageID{
-		IsInstall: bytes[0]&0x80 != 0,
-		ImageType: BootImageType(bytes[0] & 0x7f),
-		Index:     binary.BigEndian.Uint16(bytes[2:]),
-	}, nil
+// Unmarshal reads b's binary representation from buf.
+func (b *BootImageID) Unmarshal(buf *uio.Lexer) error {
+	byte0 := buf.Read8()
+	_ = buf.Read8()
+	b.IsInstall = byte0&0x80 != 0
+	b.ImageType = BootImageType(byte0 & 0x7f)
+	b.Index = buf.Read16()
+	return buf.Error()
 }
 
 // BootImage describes a boot image - contains the boot image ID and the name.
@@ -79,33 +79,23 @@ type BootImage struct {
 }
 
 // ToBytes converts a BootImage to a slice of bytes.
-func (b *BootImage) ToBytes() []byte {
-	bytes := b.ID.ToBytes()
-	bytes = append(bytes, byte(len(b.Name)))
-	bytes = append(bytes, []byte(b.Name)...)
-	return bytes
+func (b BootImage) Marshal(buf *uio.Lexer) {
+	b.ID.Marshal(buf)
+	buf.Write8(uint8(len(b.Name)))
+	buf.WriteBytes([]byte(b.Name))
 }
 
 // String converts a BootImage to a human-readable representation.
-func (b *BootImage) String() string {
+func (b BootImage) String() string {
 	return fmt.Sprintf("%v %v", b.Name, b.ID.String())
 }
 
-// BootImageFromBytes returns a deserialized BootImage struct from bytes.
-func BootImageFromBytes(bytes []byte) (*BootImage, error) {
-	// Should at least contain 4 bytes of BootImageID + byte for length of
-	// boot image name.
-	if len(bytes) < 5 {
-		return nil, fmt.Errorf("not enough bytes to serialize BootImage")
+// Unmarshal reads data from buf into b.
+func (b *BootImage) Unmarshal(buf *uio.Lexer) error {
+	if err := (&b.ID).Unmarshal(buf); err != nil {
+		return err
 	}
-	imageID, err := BootImageIDFromBytes(bytes[:4])
-	if err != nil {
-		return nil, err
-	}
-	nameLength := int(bytes[4])
-	if 5+nameLength > len(bytes) {
-		return nil, fmt.Errorf("not enough bytes for BootImage")
-	}
-	name := string(bytes[5 : 5+nameLength])
-	return &BootImage{ID: *imageID, Name: name}, nil
+	nameLength := buf.Read8()
+	b.Name = string(buf.Consume(int(nameLength)))
+	return buf.Error()
 }
