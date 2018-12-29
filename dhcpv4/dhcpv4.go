@@ -5,7 +5,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"log"
+	"math"
 	"net"
 	"strings"
 
@@ -416,6 +416,52 @@ func (o Options) GetOneOption(code OptionCode) Option {
 	return nil
 }
 
+// Marshal writes options binary representations to b.
+func (o Options) Marshal(b *uio.Lexer, writeEnd bool) {
+	for _, opt := range o {
+		code := opt.Code()
+
+		// Even if the End option is in there, don't marshal it until
+		// the end.
+		if code == OptionEnd {
+			continue
+		}
+
+		data := opt.ToBytes()
+
+		// RFC 3396: If more than 256 bytes of data are given, the
+		// option is simply listed multiple times.
+		for len(data) > 0 {
+			// 1 byte: option code
+			b.Write8(uint8(code))
+
+			// Some DHCPv4 options have fixed length and do not put
+			// length on the wire.
+			if code == OptionPad {
+				continue
+			}
+
+			n := len(data)
+			if n > math.MaxUint8 {
+				n = math.MaxUint8
+			}
+
+			// 1 byte: option length
+			b.Write8(uint8(n))
+
+			// N bytes: option data
+			b.WriteBytes(data[:n])
+			data = data[n:]
+		}
+	}
+
+	if writeEnd {
+		b.Write8(uint8(OptionEnd))
+	}
+
+	// TODO: potentially pad until a minimum size.
+}
+
 // AddOption appends an option to the existing ones. If the last option is an
 // OptionEnd, it will be inserted before that. It does not deal with End
 // options that appead before the end, like in malformed packets.
@@ -511,29 +557,6 @@ func (d *DHCPv4) Summary() string {
 	return ret
 }
 
-// ValidateOptions runs sanity checks on the DHCPv4 packet and prints a number
-// of warnings if something is incorrect.
-func (d *DHCPv4) ValidateOptions() {
-	// TODO find duplicate options
-	foundOptionEnd := false
-	for _, opt := range d.Options {
-		if foundOptionEnd {
-			if opt.Code() == OptionEnd {
-				log.Print("Warning: found duplicate End option")
-			}
-			if opt.Code() != OptionEnd && opt.Code() != OptionPad {
-				log.Printf("Warning: found option %v (%v) after End option", opt.Code(), opt.Code().String())
-			}
-		}
-		if opt.Code() == OptionEnd {
-			foundOptionEnd = true
-		}
-	}
-	if !foundOptionEnd {
-		log.Print("Warning: no End option found")
-	}
-}
-
 // IsOptionRequested returns true if that option is within the requested
 // options of the DHCPv4 message.
 func (d *DHCPv4) IsOptionRequested(requested OptionCode) bool {
@@ -593,9 +616,7 @@ func (d *DHCPv4) ToBytes() []byte {
 	// The magic cookie.
 	buf.WriteBytes(magicCookie[:])
 
-	for _, opt := range d.Options {
-		buf.WriteBytes(opt.ToBytes())
-	}
+	d.Options.Marshal(buf, true)
 	return buf.Data()
 }
 
