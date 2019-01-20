@@ -9,35 +9,88 @@ import (
 	"github.com/insomniacslk/dhcp/iana"
 )
 
-// DuidType is the DUID type as defined in rfc3315.
-type DuidType uint16
+type DUID interface {
+	fmt.Stringer
+	Type() DUIDType
+	ToBytes() []byte
+	FromBytes([]byte) error
+	Equal(DUID) bool
+}
+
+// DUIDType is the DUID type as defined in rfc3315.
+type DUIDType uint16
 
 // DUID types
 const (
-	DUID_LLT  DuidType = 1
-	DUID_EN   DuidType = 2
-	DUID_LL   DuidType = 3
-	DUID_UUID DuidType = 4
+	DUID_LLT  DUIDType = 1
+	DUID_EN   DUIDType = 2
+	DUID_LL   DUIDType = 3
+	DUID_UUID DUIDType = 4
 )
 
-// DuidTypeToString maps a DuidType to a name.
-var DuidTypeToString = map[DuidType]string{
+// duidTypeToString maps a DUIDType to a name.
+var duidTypeToString = map[DUIDType]string{
 	DUID_LL:   "DUID-LL",
 	DUID_LLT:  "DUID-LLT",
 	DUID_EN:   "DUID-EN",
 	DUID_UUID: "DUID-UUID",
 }
 
-func (d DuidType) String() string {
-	if dtype, ok := DuidTypeToString[d]; ok {
+func (d DUIDType) String() string {
+	if dtype, ok := duidTypeToString[d]; ok {
 		return dtype
 	}
-	return "Unknown"
+	return fmt.Sprintf("unknown (%d)", d)
+}
+
+type DUIDLL struct {
+	HWType iana.HWType
+	HWAddr net.HardwareAddr
+}
+
+func (d DUIDLL) Type() DUIDType {
+	return DUID_LL
+}
+
+func (d DUIDLL) ToBytes() []byte {
+	buf := uio.NewBigEndianBuffer(nil)
+	buf.Write16(uint16(d.Type()))
+	buf.Write16(uint16(d.HWType))
+	buf.WriteBytes(d.HWAddr)
+	return buf.Data()
+}
+
+type DUIDLLT struct {
+	HWType iana.HWType
+	Time   uint32
+	HWAddr net.HardwareAddr
+}
+
+func (d DUIDLLT) Type() DUIDType {
+	return DUID_LLT
+}
+
+func (d DUIDLLT) ToBytes() []byte {
+	buf := uio.NewBigEndianBuffer(nil)
+	buf.Write16(uint16(d.Type()))
+	buf.Write16(uint16(d.HWType))
+	buf.Write32(d.Time)
+	buf.WriteBytes(d.HWAddr)
+	return buf.Data()
+}
+
+type DUIDEN struct {
+	EnterpriseNumber uint32
+	Identifier       []byte
+}
+
+type DUIDUUID struct {
+	UUID [16]byte
 }
 
 // Duid is a DHCP Unique Identifier.
 type Duid struct {
-	Type                 DuidType
+	Type                 DUIDType
 	HwType               iana.HWType // for DUID-LLT and DUID-LL. Ignored otherwise. RFC 826
 	Time                 uint32      // for DUID-LLT. Ignored otherwise
 	LinkLayerAddr        net.HardwareAddr
@@ -125,7 +178,7 @@ func DuidFromBytes(data []byte) (*Duid, error) {
 		return nil, fmt.Errorf("Invalid DUID: shorter than 2 bytes")
 	}
 	d := Duid{}
-	d.Type = DuidType(binary.BigEndian.Uint16(data[0:2]))
+	d.Type = DUIDType(binary.BigEndian.Uint16(data[0:2]))
 	if d.Type == DUID_LLT {
 		if len(data) < 8 {
 			return nil, fmt.Errorf("Invalid DUID-LLT: shorter than 8 bytes")
