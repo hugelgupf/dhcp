@@ -6,9 +6,18 @@ import (
 	"net"
 	"os"
 
+	"github.com/insomniacslk/dhcp/dhcpv6"
 	"github.com/insomniacslk/dhcp/interfaces"
 	"golang.org/x/sys/unix"
 )
+
+func joinGroup(fd int, ifi *net.Interface, grp net.IP) error {
+	mreq := &unix.IPv6Mreq{}
+	copy(mreq.Multiaddr[:], grp)
+	mreq.Interface = uint32(ifi.Index)
+
+	return unix.SetsockoptIPv6Mreq(fd, unix.IPPROTO_IPV6, unix.IPV6_JOIN_GROUP, mreq)
+}
 
 // NewIPv6UDPConn returns a UDPv6-only connection bound to both the interface and port
 // given based on a IPv6 DGRAM socket.
@@ -45,6 +54,19 @@ func NewIPv6UDPConn(iface string, addr *net.UDPAddr) (*net.UDPConn, error) {
 					"Restart with elevated privilege, or run without specifying an interface to bind to all available interfaces.")
 			}
 			return nil, fmt.Errorf("cannot bind to interface %s: %v", iface, err)
+		}
+
+		ifacec, err := net.InterfaceByName(iface)
+		if err != nil {
+			return nil, err
+		}
+
+		// For wildcard addresses on the correct port, listen on both multicast
+		// addresses defined in the RFC as a "default" behaviour
+		for _, g := range []net.IP{dhcpv6.AllDHCPRelayAgentsAndServers, dhcpv6.AllDHCPServers} {
+			if err := joinGroup(fd, ifacec, g.To16()); err != nil {
+				return nil, err
+			}
 		}
 	}
 

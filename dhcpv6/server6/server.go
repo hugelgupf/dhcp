@@ -53,12 +53,13 @@
 package server6
 
 import (
+	//"fmt"
 	"log"
 	"net"
 	"os"
 
 	"github.com/insomniacslk/dhcp/dhcpv6"
-	"golang.org/x/net/ipv6"
+	//	"golang.org/x/net/ipv6"
 )
 
 // Handler is a type that defines the handler function to be called every time a
@@ -132,6 +133,7 @@ func NewServer(ifname string, addr *net.UDPAddr, handler Handler, opt ...ServerO
 	for _, o := range opt {
 		o(s)
 	}
+	log.Printf("ok")
 	if s.conn != nil {
 		return s, nil
 	}
@@ -142,6 +144,7 @@ func NewServer(ifname string, addr *net.UDPAddr, handler Handler, opt ...ServerO
 			Port: dhcpv6.DefaultServerPort,
 		}
 	}
+	log.Printf("hah")
 
 	var (
 		err   error
@@ -155,10 +158,26 @@ func NewServer(ifname string, addr *net.UDPAddr, handler Handler, opt ...ServerO
 			return nil, err
 		}
 	}
+	log.Printf("interface: %s %d", iface.Name, iface.Index)
 	// no connection provided by the user, create a new one
-	s.conn, err = NewIPv6UDPConn(ifname, addr)
+	/*s.conn, err = NewIPv6UDPConn(ifname, addr)
 	if err != nil {
 		return nil, err
+	}*/
+
+	s.conn, err = net.ListenMulticastUDP("udp6", iface, &net.UDPAddr{
+		IP:   dhcpv6.AllDHCPRelayAgentsAndServers,
+		Port: dhcpv6.DefaultServerPort,
+		Zone: iface.Name,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	/*s.conn, err = net.ListenPacket("udp6", fmt.Sprintf("[::]:%d", dhcpv6.DefaultServerPort))
+	if err != nil {
+		return nil, err
+		// error handling
 	}
 
 	p := ipv6.NewPacketConn(s.conn)
@@ -170,16 +189,16 @@ func NewServer(ifname string, addr *net.UDPAddr, handler Handler, opt ...ServerO
 		// For wildcard addresses on the correct port, listen on both multicast
 		// addresses defined in the RFC as a "default" behaviour
 		for _, g := range []net.IP{dhcpv6.AllDHCPRelayAgentsAndServers, dhcpv6.AllDHCPServers} {
-			group := net.UDPAddr{
+			group := &net.UDPAddr{
 				IP:   g,
 				Port: dhcpv6.DefaultServerPort,
 			}
-			if err := p.JoinGroup(iface, &group); err != nil {
+			log.Printf("joining group %s %s", iface.Name, group)
+			if err := p.JoinGroup(iface, group); err != nil {
 				return nil, err
 			}
-
 		}
-	}
+	}*/
 
 	return s, nil
 }
